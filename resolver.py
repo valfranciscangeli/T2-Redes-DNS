@@ -1,4 +1,5 @@
 import socket
+from dnslib.dns import CLASS, QTYPE
 from dns_message import *
 from utils import *
 from dnslib import DNSRecord
@@ -10,13 +11,11 @@ puerto_DNS = 53
 raiz_DNS = '192.33.4.12'
 buff_size = 4096
 root_address = (raiz_DNS, puerto_DNS)
-global original_id
-original_id = 0
 
 
 # ======================================================
 # recive mensaje en bytes y el id original
-def resolver(mensaje_consulta, send_address=root_address) -> DNS_message:
+def resolver(mensaje_consulta, original_id, send_address=root_address) -> DNS_message:
 
     print(f"enviando : \n {parse_dns_message(mensaje_consulta)}")
 
@@ -47,12 +46,12 @@ def resolver(mensaje_consulta, send_address=root_address) -> DNS_message:
                     if posible_ip != None:
                         print("hay A en additional ... ")
                         ip = posible_ip._data
-                        ip = ".".join(map(str, ip))
+                        ip =  ".".join(map(str, ip))
                         print(f"ip: {ip} \n ===========================")
                         print("se encontró ip ...")
                         new_address = (ip, puerto_DNS)
                         print(" llamada recursiva con nueva ip desde additional")
-                        return resolver(mensaje_consulta, new_address)
+                        return resolver(mensaje_consulta, original_id, new_address)
 
                 else:
                     print(" no habia A en additional ... ")
@@ -69,13 +68,11 @@ def resolver(mensaje_consulta, send_address=root_address) -> DNS_message:
                             posible_ip = dns_root_answer.get_first_ip_in_answer_type_A()
                             if posible_ip != None:  # si hay un mensaje tipo A
                                 name_server_ip = posible_ip
-                                print(
-                                    f"ip: {name_server_ip} \n ===========================")
+                                print(f"ip: {name_server_ip} \n ===========================")
                                 print("se encontró ip del name server ...")
                                 new_address = (name_server_ip, puerto_DNS)
-                                print(
-                                    "llamada recursiva con la direccion del nameserver")
-                                return resolver(mensaje_consulta, new_address)
+                                print("llamada recursiva con la direccion del nameserver")
+                                return resolver(mensaje_consulta, original_id, new_address)
 
     print("no se pudo resolver, retornando None ...")
     return None  # type: ignore
@@ -120,13 +117,13 @@ def my_resolver(port=8000):
             print("entramos a retornar el mensaje final ...")
             response = msg_from_resolver.build_bytes_msg()
             connection_socket.sendto(response, return_address)
-            print(
-                f"Mensaje enviado al cliente: \n {parse_dns_message(response)}")
+            print(f"Mensaje enviado al cliente: \n {parse_dns_message(response)}")
         else:
             print(f"No se pudo responder al cliente")
+        
 
         # seguimos esperando por si llegan otras conexiones
-        contador_mensajes += 1
+        contador_mensajes +=1
 
 
 my_resolver()  # ejectutamos el resolver
