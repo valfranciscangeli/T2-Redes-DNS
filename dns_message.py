@@ -1,7 +1,8 @@
 import dnslib.dns
-from dnslib import DNSRecord, DNSQuestion, A, AAAA, NS, DNSHeader
-from dnslib.dns import CLASS, QTYPE
-from dnslib import DNSRecord, RR, QTYPE
+from dnslib import DNSRecord, DNSQuestion, DNSHeader,  QTYPE
+import socket
+from dns_message import *
+
 
 # ==============================================
 """ Clase DNS_message que guarda informacion extraida de un mensaje dns """
@@ -40,9 +41,9 @@ class DNS_message:
             ar_type = QTYPE.get(i_add_record.rclass)
 
             if ar_type == 'A':  # si el tipo es 'A' (Address)
-                # i_add_record_rname = i_add_record.rname  # nombre de dominio
+                i_add_record_rname = i_add_record.rname  # nombre de dominio
                 i_add_record_rdata = i_add_record.rdata  # IP asociada
-                return i_add_record_rdata
+                return i_add_record_rdata, i_add_record_rname
 
         return None
 
@@ -52,19 +53,19 @@ class DNS_message:
             authority_section_i = self.Authority[i]
 
             authority_section_i_rdata = authority_section_i.rdata
+            authority_section_i_rname = authority_section_i.rname
 
             # si recibimos un registro tipo NS
             if isinstance(authority_section_i_rdata, dnslib.dns.NS):
                 # entonces authority_section_0_rdata contiene el nombre de dominio del primer servidor de nombre de la lista
-                name_server_domain = authority_section_i_rdata
-                return name_server_domain
-
+                
+                return authority_section_i_rdata, authority_section_i_rname
         return None
 
     def build_dns_record(self):
         # agregamos qname
         dns_record = DNSRecord(q=DNSQuestion(self.Qname, self.Qtype))
-        dns_record.header = DNSHeader(rd=0) #recursion no habilitada
+        dns_record.header = DNSHeader(rd=0)  # recursion no habilitada
         dns_record.header.id = self.id
 
         # agregamos answer
@@ -132,3 +133,34 @@ def parse_dns_message(raw_message):
     additional = dns_msg.ar
 
     return DNS_message(dns_id, qname, ancount, nscount, arcount, answer, authority, additional)
+
+
+# ==============================================
+""" retorna DNS_message o None """
+
+
+def send_dns_message(address, message_in_bytes, buffer_size: int, wait_for_response: bool, debug:bool=False):
+    # no orientado a conexion
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    response = None
+    try:
+        if debug :
+            print(f"enviando mensaje a {address} ...")
+        sock.sendto(message_in_bytes, address)
+        if debug :
+            print("mensaje enviado ...")
+        if wait_for_response:
+            if debug :
+                print("recibiendo respuesta ...")
+            data, _ = sock.recvfrom(buffer_size)
+            if debug :
+                print("parseando respuesta ...")
+            response = parse_dns_message(data)
+    finally:
+        if debug :
+            print("cerrando conexión ...")
+        sock.close()
+        if debug :
+            print("conexión cerrada ...")
+
+    return response
