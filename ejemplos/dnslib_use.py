@@ -1,4 +1,4 @@
-mport socket
+import socket
 from dnslib import DNSRecord
 from dnslib.dns import CLASS, QTYPE
 import dnslib
@@ -153,7 +153,7 @@ print_dns_reply_elements(dnslib_reply_1)
 
 print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 # Si ahora queremos saber la IP, podemos volver a preguntarle al resolver. Esta vez preguntamos por el primary_name_server
-dnslib_reply_2 = send_dns_message("a.nic.cl.", "8.8.8.8", 53)
+dnslib_reply_2 = send_dns_message("www.uchile.cl.", "8.8.8.8", 53)
 # En las respuestas vamos a obtener la IP de este primary_name_server
 print_dns_reply_elements(dnslib_reply_2)
 
