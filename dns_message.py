@@ -1,14 +1,16 @@
 import dnslib.dns
-from dnslib import DNSRecord, DNSQuestion, A, AAAA, NS
+from dnslib import DNSRecord, DNSQuestion, A, AAAA, NS, DNSHeader
 from dnslib.dns import CLASS, QTYPE
+from dnslib import DNSRecord, RR, QTYPE
 
 # ==============================================
 """ Clase DNS_message que guarda informacion extraida de un mensaje dns """
 
 
 class DNS_message:
-    def __init__(self, id,  Qname, ANCOUNT, NSCOUNT, ARCOUNT, Answer=[], Authority=[], Additional=[]):
+    def __init__(self, id,  Qname,  ANCOUNT, NSCOUNT, ARCOUNT, Answer=[], Authority=[], Additional=[], Qtype=QTYPE.A):
         self.id = id
+        self.Qtype = Qtype
         self.Qname = Qname
         self.ANCOUNT = ANCOUNT
         self.NSCOUNT = NSCOUNT
@@ -16,11 +18,12 @@ class DNS_message:
         self.Answer = Answer
         self.Authority = Authority
         self.Additional = Additional
-        
+
     def get_first_ip_in_answer_type_A(self):
 
         if self.Answer != []:
-            first_answer = self.Answer.get_a()  # primer objeto en la lista all_resource_records
+            # primer objeto en la lista all_resource_records
+            first_answer = self.Answer.get_a()
 
             return first_answer.rdata  # rdata asociada a la respuesta
 
@@ -45,28 +48,28 @@ class DNS_message:
 
     def get_first_ns_in_authority(self):
         for i in range(len(self.Authority)):
-            authority_section_i = self.Authority[i]  # objeto tipo dnslib.dns.RR
+            # objeto tipo dnslib.dns.RR
+            authority_section_i = self.Authority[i]
 
             authority_section_i_rdata = authority_section_i.rdata
 
-            if isinstance(authority_section_i_rdata, dnslib.dns.NS): # si recibimos un registro tipo NS
-                name_server_domain = authority_section_i_rdata  # entonces authority_section_0_rdata contiene el nombre de dominio del primer servidor de nombre de la lista
+            # si recibimos un registro tipo NS
+            if isinstance(authority_section_i_rdata, dnslib.dns.NS):
+                # entonces authority_section_0_rdata contiene el nombre de dominio del primer servidor de nombre de la lista
+                name_server_domain = authority_section_i_rdata
                 return name_server_domain
-            
+
         return None
 
     def build_dns_record(self):
-
-        dns_record = DNSRecord()
         # agregamos qname
-        dns_record.question(self.Qname)
-        # qname = (self.Qname).encode('utf-8')
-        # dns_record.add_question(DNSQuestion(qname))
+        dns_record = DNSRecord(q=DNSQuestion(self.Qname, self.Qtype))
+        dns_record.header = DNSHeader(rd=0) #recursion no habilitada
+        dns_record.header.id = self.id
 
         # agregamos answer
         for ans in self.Answer:
-            if ans.rtype == A:
-                dns_record.add_answer(ans)
+            dns_record.add_answer(ans)
 
         # agregamos authority
         for auth in self.Authority:
@@ -74,33 +77,33 @@ class DNS_message:
 
         # agregamos additional
         for add in self.Additional:
-            if add.rtype == A or add.rtype == AAAA:
-                dns_record.add_ar(add)
+            dns_record.add_ar(add)
 
         return dns_record
 
-    def build_binary_msg(self):
+    def build_bytes_msg(self):
         # pasamos de dns record a binario
         dns_record = self.build_dns_record()
-        return dns_record.pack()
+        return bytes(dns_record.pack())
 
     def __str__(self):
 
         anss = ""
+        space = "           "
         for ans in self.Answer:
-            anss += '   '+str(ans) + ', ' + '\n'
+            anss += f'{space}{str(ans)},\n'
         auths = ""
 
         for auth in self.Authority:
-            auths += '   '+str(auth)+', ' + '\n'
-
+            auths += f'{space}{str(auth)},\n'
         adds = ""
         for add in self.Additional:
-            adds += '   '+str(add) + ', ' + '\n'
+            adds += f'{space}{str(add)},\n'
 
         return f"DNS Message: ==================\n\
             ID: {self.id}\n\
             Qname: {self.Qname}\n\
+            Qtype: {self.Qtype}\n\
             ANCOUNT: {self.ANCOUNT}\n\
             NSCOUNT: {self.NSCOUNT}\n\
             ARCOUNT: {self.ARCOUNT}\n\
@@ -118,9 +121,8 @@ def parse_dns_message(raw_message):
     dns_msg = DNSRecord.parse(raw_message)
 
     dns_id = dns_msg.header.id
-
-    qname = dns_msg.q.qname
-
+    question = dns_msg.q
+    qname = question.get_qname()
     ancount = dns_msg.header.a
     nscount = dns_msg.header.auth
     arcount = dns_msg.header.ar
