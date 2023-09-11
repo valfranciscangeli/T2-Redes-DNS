@@ -2,6 +2,7 @@ import dnslib.dns
 from dnslib import DNSRecord, DNSQuestion, DNSHeader,  QTYPE
 import socket
 from dns_message import *
+from dnslib.dns import RR, A
 
 
 # ==============================================
@@ -21,12 +22,19 @@ class DNS_message:
         self.Additional = Additional
 
     def get_first_ip_in_answer_type_A(self):
+        for i in range(len(self.Answer)):
+            i_ans_record = self.Answer[i]  # objeto tipo dnslib.dns.RR
 
-        if self.Answer != []:
-            # primer objeto en la lista all_resource_records
-            first_answer = self.Answer.get_a()
 
-            return first_answer.rdata  # rdata asociada a la respuesta
+            # buscamos la ip de un record A
+
+            # para saber si esto es asi debemos revisar el tipo de record
+            ar_type = QTYPE.get(i_ans_record.rclass)
+
+            if ar_type == 'A':  # si el tipo es 'A' (Address)
+                i_add_record_rname = i_ans_record.rname  # nombre de dominio
+                i_add_record_rdata = i_ans_record.rdata  # IP asociada
+                return i_add_record_rdata, i_add_record_rname
 
         return None
 
@@ -58,7 +66,7 @@ class DNS_message:
             # si recibimos un registro tipo NS
             if isinstance(authority_section_i_rdata, dnslib.dns.NS):
                 # entonces authority_section_0_rdata contiene el nombre de dominio del primer servidor de nombre de la lista
-                
+
                 return authority_section_i_rdata, authority_section_i_rname
         return None
 
@@ -134,33 +142,69 @@ def parse_dns_message(raw_message):
 
     return DNS_message(dns_id, qname, ancount, nscount, arcount, answer, authority, additional)
 
+# ==============================================
+""" Funcion que recibe un DNSRecord y entrega
+una objeto DNS_message con sus componentes """
+
+
+def parse_dns_record(dnsrecord_message):
+
+    dns_id = dnsrecord_message.header.id
+    question = dnsrecord_message.q
+    qname = question.get_qname()
+    ancount = dnsrecord_message.header.a
+    nscount = dnsrecord_message.header.auth
+    arcount = dnsrecord_message.header.ar
+
+    answer = dnsrecord_message.rr
+    authority = dnsrecord_message.auth
+    additional = dnsrecord_message.ar
+
+    return DNS_message(dns_id, qname, ancount, nscount, arcount, answer, authority, additional)
+
 
 # ==============================================
 """ retorna DNS_message o None """
 
 
-def send_dns_message(address, message_in_bytes, buffer_size: int, wait_for_response: bool, debug:bool=False):
+def send_dns_message(address, message_in_bytes, buffer_size: int, wait_for_response: bool, debug: bool = False):
     # no orientado a conexion
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     response = None
     try:
-        if debug :
+        if debug:
             print(f"enviando mensaje a {address} ...")
         sock.sendto(message_in_bytes, address)
-        if debug :
+        if debug:
             print("mensaje enviado ...")
         if wait_for_response:
-            if debug :
+            if debug:
                 print("recibiendo respuesta ...")
             data, _ = sock.recvfrom(buffer_size)
-            if debug :
+            if debug:
                 print("parseando respuesta ...")
             response = parse_dns_message(data)
     finally:
-        if debug :
+        if debug:
             print("cerrando conexión ...")
         sock.close()
-        if debug :
+        if debug:
             print("conexión cerrada ...")
 
     return response
+
+
+# ==============================================
+
+def create_answer_message(qname, ip_answer, id, DNSRecord_query):
+    dns_record = DNSRecord_query
+
+    # dns_record = DNSRecord(q=DNSQuestion(qname, QTYPE.A))
+    # dns_record.header = DNSHeader(rd=0)  # recursion no habilitada
+    # dns_record.header.id = id
+
+    # Modificar el mensaje de pregunta
+    #dns_record.add_answer(RR(qname, QTYPE.A, rdata=A(ip_answer)))
+    dns_record.add_answer(*RR.fromZone("{} A {}".format(qname, ip_answer)))
+
+    return dns_record
